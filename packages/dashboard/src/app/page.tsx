@@ -1,8 +1,47 @@
-'use client';
-
-import React, { useState } from 'react';
-
 interface ContractStatus {
+  contractId: string;
+  label: string;
+  overallStatus: 'healthy' | 'warning' | 'critical' | 'archived';
+  checkedAt: string;
+  entries: Array<{
+    remainingLedgers: number;
+    status: 'healthy' | 'warning' | 'critical' | 'archived';
+  }>;
+}
+
+export const dynamic = 'force-dynamic';
+
+interface DashboardData {
+  contracts: ContractStatus[];
+  keeperStatus: string;
+  connected: boolean;
+}
+
+async function loadDashboardData(): Promise<DashboardData> {
+  const keeperUrl = process.env.KEEPER_URL;
+  if (!keeperUrl) {
+    return { contracts: [], keeperStatus: 'Not configured', connected: false };
+  }
+
+  const headers: HeadersInit = {};
+  const token = process.env.EVERGREEN_KEEPER_API_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const [contractsResponse, statusResponse] = await Promise.all([
+      fetch(new URL('/contracts', keeperUrl), { headers, cache: 'no-store' }),
+      fetch(new URL('/status', keeperUrl), { headers, cache: 'no-store' }),
+    ]);
+    if (!contractsResponse.ok || !statusResponse.ok) throw new Error('Keeper request failed');
+    const contractsBody = (await contractsResponse.json()) as { contracts: ContractStatus[] };
+    const statusBody = (await statusResponse.json()) as { overall: string };
+    return { contracts: contractsBody.contracts, keeperStatus: statusBody.overall, connected: true };
+  } catch {
+    return { contracts: [], keeperStatus: 'Unavailable', connected: false };
+  }
+}
+
+interface ContractRow {
   id: string;
   name: string;
   address: string;
@@ -13,49 +52,22 @@ interface ContractStatus {
   autoBump: boolean;
 }
 
-export default function DashboardPage() {
-  const [contracts] = useState<ContractStatus[]>([
-    {
-      id: '1',
-      name: 'Liquidity Pool Vault',
-      address: 'CA7...92K',
-      ttlRemaining: 142000,
-      minTtl: 50000,
-      status: 'healthy',
-      lastExtended: '2 hours ago',
-      autoBump: true,
-    },
-    {
-      id: '2',
-      name: 'Governance Voting',
-      address: 'CB3...11X',
-      ttlRemaining: 48000,
-      minTtl: 50000,
-      status: 'warning',
-      lastExtended: '1 day ago',
-      autoBump: true,
-    },
-    {
-      id: '3',
-      name: 'Staking Rewards Store',
-      address: 'CC9...88M',
-      ttlRemaining: 12000,
-      minTtl: 50000,
-      status: 'critical',
-      lastExtended: '3 days ago',
-      autoBump: true,
-    },
-    {
-      id: '4',
-      name: 'Legacy Escrow State',
-      address: 'CD1...44P',
-      ttlRemaining: 0,
-      minTtl: 50000,
-      status: 'archived',
-      lastExtended: 'Never (Restore pending)',
-      autoBump: false,
-    },
-  ]);
+export default async function DashboardPage() {
+  const data = await loadDashboardData();
+  const contracts: ContractRow[] = data.contracts.map((contract) => ({
+    id: contract.contractId,
+    name: contract.label,
+    address: `${contract.contractId.slice(0, 4)}...${contract.contractId.slice(-3)}`,
+    ttlRemaining: contract.entries.length
+      ? Math.min(...contract.entries.map((entry) => entry.remainingLedgers))
+      : 0,
+    minTtl: 0,
+    status: contract.overallStatus,
+    lastExtended: new Date(contract.checkedAt).toLocaleString(),
+    autoBump: true,
+  }));
+  const healthyCount = contracts.filter((contract) => contract.status === 'healthy').length;
+  const healthRatio = contracts.length === 0 ? 0 : Math.round((healthyCount / contracts.length) * 100);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
@@ -76,7 +88,9 @@ export default function DashboardPage() {
           </div>
           <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm">
             <span className="text-slate-400">Keeper Status:</span>{' '}
-            <span className="text-emerald-400 font-semibold">Active</span>
+            <span className={data.connected ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
+              {data.keeperStatus}
+            </span>
           </div>
         </div>
       </header>
@@ -86,13 +100,17 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
             <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Monitored Contracts</h3>
-            <p className="text-3xl font-bold mt-2 text-slate-100">4</p>
-            <span className="text-xs text-emerald-400 mt-1 inline-block">100% active scan</span>
+            <p className="text-3xl font-bold mt-2 text-slate-100">{contracts.length}</p>
+            <span className="text-xs text-emerald-400 mt-1 inline-block">
+              {data.connected ? 'Live keeper data' : 'Keeper unavailable'}
+            </span>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
             <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Health Ratio</h3>
-            <p className="text-3xl font-bold mt-2 text-emerald-400">75%</p>
-            <span className="text-xs text-slate-400 mt-1 inline-block">3 / 4 contracts compliant</span>
+            <p className="text-3xl font-bold mt-2 text-emerald-400">{healthRatio}%</p>
+            <span className="text-xs text-slate-400 mt-1 inline-block">
+              {healthyCount} / {contracts.length} contracts healthy
+            </span>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
             <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Bumps (24h)</h3>
@@ -127,6 +145,13 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-sm">
+                {contracts.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-10 px-6 text-center text-slate-400">
+                      {data.connected ? 'No contracts are configured.' : 'Keeper data is currently unavailable.'}
+                    </td>
+                  </tr>
+                )}
                 {contracts.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-4 px-6 font-medium text-slate-200">{c.name}</td>

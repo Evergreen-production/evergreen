@@ -22,6 +22,7 @@
 
 * [Operations](operations/production-checklist.md)
   * [Production Checklist](operations/production-checklist.md)
+  * [Vercel Services Deployment](operations/vercel-services.md)
   * [Threat Model](threat-model.md)
   * [Architecture Decisions](DECISIONS.md)
 

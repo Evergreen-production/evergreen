@@ -13,11 +13,18 @@ async function main() {
   const configPath = process.env["EVERGREEN_CONFIG"] ?? "./evergreen.toml";
 
   let raw: string;
-  try {
-    raw = readFileSync(configPath, "utf-8");
-  } catch {
-    console.error(`[keeper] Cannot read config: ${configPath}`);
-    process.exit(1);
+  const inlineConfig = process.env["EVERGREEN_CONFIG_TOML"];
+  if (inlineConfig) {
+    raw = inlineConfig;
+  } else {
+    try {
+      raw = readFileSync(configPath, "utf-8");
+    } catch {
+      console.error(
+        `[keeper] Cannot read config: ${configPath}. Set EVERGREEN_CONFIG_TOML when a config file cannot be mounted.`
+      );
+      process.exit(1);
+    }
   }
 
   const toml = parseToml(raw);

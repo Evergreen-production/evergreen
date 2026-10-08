@@ -44,7 +44,7 @@ export class Keeper {
     this.rpc = createRpcClient(config.rpcUrl);
 
     this.httpApi = new HttpStatusApi(this.store, {
-      port: parseInt(process.env["EVERGREEN_API_PORT"] ?? "8742", 10),
+      port: parseInt(process.env["PORT"] ?? process.env["EVERGREEN_API_PORT"] ?? "8742", 10),
       token: config.keeperApiToken ?? process.env["EVERGREEN_KEEPER_API_TOKEN"],
     });
 
