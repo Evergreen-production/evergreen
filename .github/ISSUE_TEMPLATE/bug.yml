@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible Evergreen defect
+title: "bug: "
+labels: [bug, triage]
+body:
+  - type: textarea
+    id: description
+    attributes: { label: Description, description: What happened and what did you expect? }
+    validations: { required: true }
+  - type: textarea
+    id: reproduce
+    attributes: { label: Reproduction, description: Include minimal steps and redacted configuration. }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: Version, placeholder: v0.1.0 }
+    validations: { required: true }
+  - type: dropdown
+    id: network
+    attributes: { label: Network, options: [Testnet, Mainnet, Futurenet, Standalone] }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Redacted logs, render: shell }
