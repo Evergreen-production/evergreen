@@ -10,7 +10,7 @@
     "lint": "eslint packages/*/src/**/*.ts",
     "format": "prettier --check \"**/*.{ts,js,json,md,toml}\"",
     "format:write": "prettier --write \"**/*.{ts,js,json,md,toml}\"",
-    "typecheck": "pnpm --filter @evergreen/core build && pnpm --filter \"@evergreen/core...\" typecheck",
+    "typecheck": "pnpm --filter @evergreen/core build && pnpm --filter \"@evergreen/*\" typecheck",
     "cargo:test": "cargo test --manifest-path crates/evergreen-ttl/Cargo.toml",
     "cargo:clippy": "cargo clippy --manifest-path crates/evergreen-ttl/Cargo.toml -- -D warnings"
   },
