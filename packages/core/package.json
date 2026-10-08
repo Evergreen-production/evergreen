@@ -1,0 +1,21 @@
+{
+  "name": "@evergreen/core",
+  "version": "0.1.0",
+  "description": "Core TTL scanning, calculation, footprint extend and restore building for Soroban contracts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^13.0.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,111 @@
+# Task: Build "Evergreen", a TTL / state-archival keeper for Soroban contracts
+
+You are building an open-source project end to end. I will not be available for questions, so make reasonable decisions yourself and record each one in `docs/DECISIONS.md` (decision, alternatives, reason). Work in phases, commit after each meaningful step, and keep the repo in a working state at every commit.
+
+## 1. Background and goal
+Soroban contract data, contract instances and contract code entries have a TTL (time to live) measured in ledgers. If nobody extends it, entries are archived and the contract can stop working until the entries are restored. Most teams handle this with ad-hoc scripts or forget it entirely.
+
+Evergreen watches deployed contracts, warns before entries expire, and automatically extends (or restores) TTLs within strict fee and budget limits. It also provides a CI check and a small dashboard. The project must be clean and well documented enough that an external maintainer would trust it and outside contributors could pick up issues easily.
+
+**Verify every Stellar/Soroban detail against current official documentation before relying on it** (state archival, `ExtendFootprintTTL`, `RestoreFootprint`, RPC methods, fee/resource handling, network limits on maximum TTL, ledger timing). Do not rely on memory for protocol numbers. If docs and your assumptions conflict, follow the docs and note it in DECISIONS.md. Never invent APIs; if unsure, read the SDK source or docs.
+
+## 2. Stack
+- Monorepo using pnpm workspaces, TypeScript (strict mode), Node 20+.
+- `@stellar/stellar-sdk` and Stellar RPC (not deprecated Horizon paths) for ledger entries, simulation and submission.
+- Vitest for tests, ESLint + Prettier, GitHub Actions for CI.
+- Dashboard: Next.js (App Router) + Tailwind.
+- Optional Rust helper crate for contract authors (Soroban SDK).
+- Default network: **Testnet**. Mainnet must be an explicit opt-in flag/config value with a warning.
+
+## 3. Repository layout
+```
+evergreen/
+├── packages/
+│   ├── core/        # TTL scanning + extend/restore logic, no I/O besides RPC
+│   ├── cli/         # `evergreen` command
+│   ├── keeper/      # long-running service: scheduler, alerts, state, HTTP status API
+│   └── dashboard/   # Next.js dashboard reading the keeper's status API
+├── crates/
+│   └── evergreen-ttl/   # Rust helper crate + docs of TTL patterns
+├── examples/        # example Soroban contract + example config + walkthrough
+├── docs/            # architecture, config reference, threat model, DECISIONS.md, ISSUES.md
+├── .github/workflows/
+├── README.md, CONTRIBUTING.md, SECURITY.md, LICENSE (Apache-2.0 or MIT)
+```
+
+## 4. Functional requirements
+
+### 4.1 `@evergreen/core`
+- Given a contract ID, discover and inspect: the contract instance entry, the contract code (Wasm) entry, and persistent/temporary/instance storage entries the user lists explicitly (by key) in config. Where reliable, support discovering keys from events or an optional key list file. Do not claim full automatic key enumeration unless it actually works; document the limitation.
+- Return for each entry: type, durability, `liveUntilLedgerSeq`, current ledger, remaining ledgers, estimated remaining time, and status (`healthy | warning | critical | archived`) based on configurable thresholds.
+- Build extend transactions (`ExtendFootprintTTL`) and restore transactions (`RestoreFootprint`) using simulation to obtain the footprint, resource usage and fee, then apply configured fee/resource caps before signing.
+- Batch entries per transaction within network limits; handle failures per batch without aborting the whole run.
+- Dry-run mode that simulates and reports what it would do, without submitting.
+- Clean typed API, no global state, injectable RPC client for testing.
+
+### 4.2 `evergreen` CLI (`packages/cli`)
+Commands:
+- `evergreen init`: generate a starter `evergreen.toml`.
+- `evergreen check`: report TTL status for all configured contracts; exit code 0 = all healthy, 1 = warnings, 2 = critical/archived, 3 = error. Supports `--format table|json`.
+- `evergreen extend`: extend entries that are below threshold; `--dry-run`, `--contract`, `--yes`.
+- `evergreen restore`: restore archived entries (explicit confirmation unless `--yes`).
+- `evergreen watch`: run the keeper loop in the foreground.
+- Global flags: `--config`, `--network`, `--rpc-url`, `--verbose`.
+
+### 4.3 Config (`evergreen.toml`)
+Validate with a schema library (e.g. zod) with clear error messages. Support:
+- network + RPC URL + network passphrase
+- keeper account via **environment variable only** (e.g. `EVERGREEN_SECRET_KEY`); the secret key must never be read from the config file, logged, or included in error output
+- per-contract rules: contract id, label, list of entries to watch (instance, code, named keys with durability), `warn_below_days`, `extend_below_days`, `extend_to_days`, `max_fee_stroops` per transaction, optional `max_daily_spend_stroops`
+- global budget caps and check interval
+- alert channels (see below)
+
+### 4.4 Keeper service (`packages/keeper`)
+- Scheduler running checks at the configured interval, with jitter and graceful shutdown.
+- Executes extends/restores within caps. Enforce a daily spend cap, and refuse (with an alert) when a cap would be exceeded.
+- Tracks keeper account balance and alerts when it falls below a configured minimum.
+- Persists run history and the last known state (SQLite via better-sqlite3 or a simple file store; justify in DECISIONS.md).
+- Idempotent: running twice must not double-spend; handle `tx_bad_seq`, timeouts, resubmission and RPC errors with bounded retries and backoff.
+- HTTP status API (read-only): `/health`, `/status`, `/contracts`, `/runs`. No write endpoints. Optional bearer token for protection.
+- Docker image + `docker-compose.yml` example.
+
+### 4.5 Alerts
+Pluggable alert interface with these channels: generic webhook, Slack incoming webhook, Discord webhook. Alert on: entry enters warning/critical, archived entry detected, extend/restore failure, cap reached, low keeper balance, keeper recovered. De-duplicate alerts (don't repeat the same alert every cycle; use a cooldown). Make adding a new channel a ~30-line task and document how.
+
+### 4.6 GitHub Action
+Provide a composite or Node action definition in `.github/actions/evergreen-check` (documented so it can later be moved to its own repo if needed) that runs `evergreen check` and fails or warns based on input thresholds.
+
+### 4.7 Dashboard (`packages/dashboard`)
+Small, clean Next.js app that reads the keeper status API (URL via env var). Shows: watched contracts, each entry's remaining TTL with color status, recent runs, recent alerts, keeper balance. Read-only. Loading and error states required. No auth system beyond optional token passthrough. Keep it minimal and well designed.
+
+### 4.8 Rust crate `evergreen-ttl`
+Small helpers for contract authors on extending TTL inside contracts (instance, persistent, temporary), with documented recommended patterns for which storage type to use when, and an example contract in `examples/` that uses them. Must compile and pass `cargo test`. Keep scope small; correctness over breadth.
+
+## 5. Quality requirements
+- **Tests:** unit tests for core logic with a mocked RPC (status classification, threshold math, batching, cap enforcement, config validation, alert dedupe, retry behavior). Integration tests against Testnet or a local Stellar quickstart container, clearly separated and skipped by default unless an env flag is set. Aim for meaningful coverage of the money-spending paths.
+- **Safety:** no secret in logs; spend caps always enforced; dry-run default for first-time `extend` unless `--yes`; mainnet requires explicit opt-in.
+- **CI:** lint, typecheck, unit tests, build for all packages, Rust `cargo test` and `clippy`, on every PR.
+- **Docs:** README with a 5-minute quickstart, architecture diagram (Mermaid), config reference, alert channel guide, deployment guide (Docker), and `docs/THREAT_MODEL.md` (what the keeper protects against, what it doesn't, key handling, cap behavior, trust in RPC).
+- **Commits:** Conventional Commits. Small focused commits.
+
+## 6. Phases (complete in order; each ends with passing CI)
+1. Scaffold monorepo, tooling, CI, LICENSE, README skeleton.
+2. `core`: read-only status inspection + tests.
+3. `core`: extend/restore building, simulation, caps, dry-run + tests.
+4. `cli`: all commands + config validation + tests.
+5. `keeper`: scheduler, state store, retries, caps, status API + tests; Docker.
+6. Alerts: webhook, Slack, Discord, dedupe + tests.
+7. Example contract + Rust crate + end-to-end walkthrough on Testnet in `examples/`.
+8. GitHub Action + dashboard.
+9. Docs, threat model, SECURITY.md, CONTRIBUTING.md.
+10. Write `docs/ISSUES.md`: 12 to 15 well-scoped, labeled contributor issues (title, description, acceptance criteria, label `good first issue` or `help wanted`) covering things like new alert channels, more RPC providers, key-discovery improvements, extra storage-pattern docs, dashboard enhancements, and test fixtures.
+
+## 7. Definition of done
+- All packages build; lint, typecheck and unit tests pass in CI.
+- A new user can follow the README, configure one Testnet contract, run `evergreen check`, then `evergreen extend --dry-run`, then a real extend, in under 15 minutes.
+- The keeper runs in Docker, enforces caps, and sends a test alert.
+- No secrets are logged anywhere (add a test for this).
+- DECISIONS.md, THREAT_MODEL.md and ISSUES.md exist and are specific, not boilerplate.
+
+## 8. Final report
+When finished, write `docs/HANDOFF.md` with: what was built, what was verified on Testnet (include transaction hashes), what is untested or limited, known risks, and exact next steps for me. Be honest about anything that does not work or that you could not verify.

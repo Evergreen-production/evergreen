@@ -1,0 +1,31 @@
+{
+  "name": "evergreen-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TTL / State-archival keeper for Soroban contracts on Stellar",
+  "scripts": {
+    "build": "pnpm --filter \"@evergreen/*\" build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint packages/*/src/**/*.ts",
+    "format": "prettier --check \"**/*.{ts,js,json,md,toml}\"",
+    "format:write": "prettier --write \"**/*.{ts,js,json,md,toml}\"",
+    "typecheck": "pnpm --filter \"@evergreen/*\" typecheck",
+    "cargo:test": "cargo test --manifest-path crates/evergreen-ttl/Cargo.toml",
+    "cargo:clippy": "cargo clippy --manifest-path crates/evergreen-ttl/Cargo.toml -- -D warnings"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.20.0",
+    "@typescript-eslint/parser": "^6.20.0",
+    "prettier": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "license": "Apache-2.0"
+}
