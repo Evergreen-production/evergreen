@@ -52,5 +52,8 @@ jobs:
       - name: Run Cargo Test
         run: cargo test --manifest-path crates/evergreen-ttl/Cargo.toml
 
+      - name: Check Rust Formatting
+        run: cargo fmt --manifest-path crates/evergreen-ttl/Cargo.toml -- --check
+
       - name: Run Cargo Clippy
         run: cargo clippy --manifest-path crates/evergreen-ttl/Cargo.toml -- -D warnings

@@ -4,6 +4,7 @@ dist/
 out/
 target/
 *.log
+*.tsbuildinfo
 .env
 .env.local
 evergreen-db.sqlite*
