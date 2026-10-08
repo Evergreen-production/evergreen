@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Evergreen long-running keeper daemon: scheduler, alerts, state persistence, HTTP status API",
   "main": "dist/index.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
