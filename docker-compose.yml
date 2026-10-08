@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  keeper:
+    build:
+      context: .
+      dockerfile: packages/keeper/Dockerfile
+    container_name: evergreen-keeper
+    restart: unless-stopped
+    environment:
+      - EVERGREEN_CONFIG=/app/evergreen.toml
+      - EVERGREEN_SECRET_KEY=${EVERGREEN_SECRET_KEY:-}
+      - EVERGREEN_API_PORT=8742
+    volumes:
+      - ./evergreen.toml:/app/evergreen.toml:ro
+      - keeper-data:/app/data
+    ports:
+      - "8742:8742"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8742/health').then(r => r.ok ? process.exit(0) : process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  keeper-data:

@@ -1,0 +1,15 @@
+[package]
+name = "example-counter-contract"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = "21.2.0"
+evergreen-ttl = { path = "../../crates/evergreen-ttl" }
+
+[dev-dependencies]
+soroban-sdk = { version = "21.2.0", features = ["testutils"] }
