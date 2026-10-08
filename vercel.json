@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "dashboard": {
+      "root": "packages/dashboard",
+      "framework": "nextjs",
+      "bindings": [
+        {
+          "type": "service",
+          "service": "keeper",
+          "format": "url",
+          "env": "KEEPER_URL"
+        }
+      ]
+    },
+    "keeper": {
+      "root": "packages/keeper",
+      "runtime": "container"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": {
+        "service": "dashboard"
+      }
+    }
+  ]
+}
