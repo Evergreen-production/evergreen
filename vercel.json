@@ -16,7 +16,7 @@
     "keeper": {
       "root": ".",
       "runtime": "container",
-      "entrypoint": "packages/keeper/Dockerfile"
+      "entrypoint": "Dockerfile"
     }
   },
   "rewrites": [
