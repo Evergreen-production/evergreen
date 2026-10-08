@@ -2,6 +2,7 @@
   "name": "evergreen-monorepo",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
   "description": "TTL / State-archival keeper for Soroban contracts on Stellar",
   "scripts": {
     "build": "pnpm --filter \"@evergreen/*\" build",
