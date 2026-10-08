@@ -2,7 +2,7 @@
 
 > **Automated TTL & State-Archival Keeper for Soroban Smart Contracts on Stellar**
 
-[![CI](https://github.com/stellar/evergreen/actions/workflows/ci.yml/badge.svg)](https://github.com/stellar/evergreen/actions)
+[![CI](https://github.com/Michealshodipo56/evergreen/actions/workflows/ci.yml/badge.svg)](https://github.com/Michealshodipo56/evergreen/actions)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Network Default](https://img.shields.io/badge/Default_Network-Testnet-amber.svg)](docs/config-reference.md)
 

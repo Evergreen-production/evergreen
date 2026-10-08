@@ -2,11 +2,11 @@
 name = "evergreen-ttl"
 version = "0.1.0"
 edition = "2021"
-authors = ["Evergreen Contributors <evergreen@stellar.org>"]
+authors = ["Evergreen Contributors"]
 description = "Soroban contract storage TTL extension helpers"
 license = "Apache-2.0"
 readme = "README.md"
-repository = "https://github.com/stellar/evergreen"
+repository = "https://github.com/Michealshodipo56/evergreen"
 
 [dependencies]
 soroban-sdk = "21.2.0"
