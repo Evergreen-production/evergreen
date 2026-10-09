@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind is compiled through packages/dashboard/postcss.config.js. */
+
 :root {
   --foreground-rgb: 240, 245, 250;
   --background-start-rgb: 10, 15, 24;
