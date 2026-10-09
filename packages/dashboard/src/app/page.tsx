@@ -5,6 +5,9 @@ interface ContractStatus {
   checkedAt: string;
   entries: Array<{
     remainingLedgers: number;
+    remainingSeconds: number;
+    liveUntilLedgerSeq: number;
+    expiresAt: string;
     status: 'healthy' | 'warning' | 'critical' | 'archived';
   }>;
 }
@@ -46,7 +49,9 @@ interface ContractRow {
   name: string;
   address: string;
   ttlRemaining: number;
-  minTtl: number;
+  ttlDays: number;
+  expiresAt: string | null;
+  liveUntilLedger: number | null;
   status: 'healthy' | 'warning' | 'critical' | 'archived';
   lastExtended: string;
   autoBump: boolean;
@@ -61,34 +66,50 @@ export default async function DashboardPage() {
     ttlRemaining: contract.entries.length
       ? Math.min(...contract.entries.map((entry) => entry.remainingLedgers))
       : 0,
-    minTtl: 0,
+    ttlDays: contract.entries.length
+      ? Math.max(0, Math.min(...contract.entries.map((entry) => entry.remainingSeconds)) / 86_400)
+      : 0,
+    expiresAt: contract.entries.length
+      ? contract.entries.reduce((soonest, entry) =>
+          new Date(entry.expiresAt) < new Date(soonest) ? entry.expiresAt : soonest,
+        contract.entries[0].expiresAt)
+      : null,
+    liveUntilLedger: contract.entries.length
+      ? Math.min(...contract.entries.map((entry) => entry.liveUntilLedgerSeq))
+      : null,
     status: contract.overallStatus,
     lastExtended: new Date(contract.checkedAt).toLocaleString(),
     autoBump: true,
   }));
   const healthyCount = contracts.filter((contract) => contract.status === 'healthy').length;
   const healthRatio = contracts.length === 0 ? 0 : Math.round((healthyCount / contracts.length) * 100);
+  const lowestTtlDays = contracts.length ? Math.min(...contracts.map((contract) => contract.ttlDays)) : 0;
+  const statusTone = data.keeperStatus === 'healthy'
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+    : data.keeperStatus === 'warning'
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+      : 'border-rose-500/30 bg-rose-500/10 text-rose-200';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-8">
-      <header className="max-w-7xl mx-auto mb-8 flex justify-between items-center border-b border-slate-800 pb-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_#064e3b33,_transparent_35%),linear-gradient(#020617,#0f172a)] text-slate-100 px-4 py-8 sm:px-8">
+      <header className="max-w-7xl mx-auto mb-8 flex flex-col gap-5 border-b border-slate-800/80 pb-7 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-emerald-400 flex items-center gap-3">
             <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
             Evergreen Keeper
           </h1>
-          <p className="text-slate-400 mt-1">
-            Soroban Contract State TTL Scanning & Automated Extension Keeper
+          <p className="text-slate-400 mt-2 max-w-2xl">
+            Live Stellar Testnet observability for Soroban contract state lifetime and archival risk.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm">
             <span className="text-slate-400">Network:</span>{' '}
             <span className="text-emerald-400 font-mono">Testnet (Protocol 21)</span>
           </div>
           <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm">
             <span className="text-slate-400">Keeper Status:</span>{' '}
-            <span className={data.connected ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>
+            <span className={data.keeperStatus === 'healthy' ? "text-emerald-400 font-semibold capitalize" : "text-rose-400 font-semibold capitalize"}>
               {data.keeperStatus}
             </span>
           </div>
@@ -96,6 +117,23 @@ export default async function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto space-y-8">
+        <section className={`rounded-2xl border p-5 ${statusTone}`}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em]">Live risk assessment</p>
+              <h2 className="mt-1 text-xl font-semibold capitalize">{data.keeperStatus} contract state</h2>
+              <p className="mt-1 text-sm opacity-80">
+                {data.keeperStatus === 'critical'
+                  ? 'The shortest-lived entry is below the configured 7-day extension threshold. Production is read-only, so no transaction is submitted automatically.'
+                  : 'The keeper is connected and reporting current Stellar ledger data.'}
+              </p>
+            </div>
+            <a href="https://entity-6.gitbook.io/evergreen-documentation/submission/live-demo" className="shrink-0 rounded-lg border border-current/30 px-4 py-2 text-center text-sm font-semibold hover:bg-white/10">
+              Evaluation guide ↗
+            </a>
+          </div>
+        </section>
+
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
@@ -107,30 +145,31 @@ export default async function DashboardPage() {
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
             <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Health Ratio</h3>
-            <p className="text-3xl font-bold mt-2 text-emerald-400">{healthRatio}%</p>
+            <p className={`text-3xl font-bold mt-2 ${healthRatio === 100 ? 'text-emerald-400' : 'text-rose-400'}`}>{healthRatio}%</p>
             <span className="text-xs text-slate-400 mt-1 inline-block">
               {healthyCount} / {contracts.length} contracts healthy
             </span>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Bumps (24h)</h3>
-            <p className="text-3xl font-bold mt-2 text-blue-400">18</p>
-            <span className="text-xs text-slate-400 mt-1 inline-block">Avg cost: 0.005 XLM</span>
+            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Lowest Remaining TTL</h3>
+            <p className="text-3xl font-bold mt-2 text-amber-400">{lowestTtlDays.toFixed(1)} days</p>
+            <span className="text-xs text-slate-400 mt-1 inline-block">Based on live Testnet ledgers</span>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Spending Cap</h3>
-            <p className="text-3xl font-bold mt-2 text-amber-400">1.25 / 5.0 XLM</p>
-            <span className="text-xs text-slate-400 mt-1 inline-block">Daily budget limit</span>
+            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Operating Mode</h3>
+            <p className="text-3xl font-bold mt-2 text-blue-400">Read-only</p>
+            <span className="text-xs text-slate-400 mt-1 inline-block">No signer configured in production</span>
           </div>
         </div>
 
         {/* Contract Table */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-          <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-            <h2 className="text-xl font-semibold">TTL Registry Status</h2>
-            <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 transition-colors text-white font-medium rounded-lg text-sm">
-              + Register Contract
-            </button>
+          <div className="p-6 border-b border-slate-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">TTL Registry Status</h2>
+              <p className="mt-1 text-sm text-slate-400">Live instance and code-entry lifetime from Stellar RPC.</p>
+            </div>
+            <a href="https://stellar.expert/explorer/testnet" className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Open Stellar Explorer ↗</a>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -139,9 +178,9 @@ export default async function DashboardPage() {
                   <th className="py-4 px-6">Contract Name</th>
                   <th className="py-4 px-6">Address</th>
                   <th className="py-4 px-6">Remaining TTL (Ledgers)</th>
-                  <th className="py-4 px-6">Threshold</th>
+                  <th className="py-4 px-6">Time Remaining</th>
                   <th className="py-4 px-6">Status</th>
-                  <th className="py-4 px-6">Last Extension</th>
+                  <th className="py-4 px-6">Last Checked</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-sm">
@@ -155,11 +194,16 @@ export default async function DashboardPage() {
                 {contracts.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-4 px-6 font-medium text-slate-200">{c.name}</td>
-                    <td className="py-4 px-6 font-mono text-slate-400">{c.address}</td>
+                    <td className="py-4 px-6 font-mono text-slate-400">
+                      <a className="hover:text-emerald-400" href={`https://stellar.expert/explorer/testnet/contract/${c.id}`}>{c.address} ↗</a>
+                    </td>
                     <td className="py-4 px-6 font-mono font-semibold">
                       {c.ttlRemaining.toLocaleString()}
                     </td>
-                    <td className="py-4 px-6 text-slate-400">{c.minTtl.toLocaleString()}</td>
+                    <td className="py-4 px-6 text-slate-300">
+                      <div>{c.ttlDays.toFixed(2)} days</div>
+                      <div className="mt-1 text-xs text-slate-500">Ledger {c.liveUntilLedger?.toLocaleString()}</div>
+                    </td>
                     <td className="py-4 px-6">
                       {c.status === 'healthy' && (
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-950 text-emerald-400 border border-emerald-800">
