@@ -20,6 +20,8 @@ export interface HttpApiOptions {
   port: number;
   /** Bearer token to require in Authorization header. Optional. */
   token?: string;
+  network: string;
+  signerConfigured: boolean;
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
@@ -104,7 +106,10 @@ export class HttpStatusApi {
           overall,
           contractCount: this.lastStatuses.length,
           lastCheck: this.lastStatuses[0]?.checkedAt ?? null,
+          currentLedger: this.lastStatuses[0]?.entries[0]?.currentLedger ?? null,
           uptime: Math.floor((Date.now() - this.startedAt.getTime()) / 1000),
+          network: this.opts.network,
+          operatingMode: this.opts.signerConfigured ? "automatic" : "read-only",
         });
         break;
       }

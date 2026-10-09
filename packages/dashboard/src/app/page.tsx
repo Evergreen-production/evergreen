@@ -7,6 +7,7 @@ interface ContractStatus {
     remainingLedgers: number;
     remainingSeconds: number;
     liveUntilLedgerSeq: number;
+    currentLedger: number;
     expiresAt: string;
     status: 'healthy' | 'warning' | 'critical' | 'archived';
   }>;
@@ -18,12 +19,17 @@ interface DashboardData {
   contracts: ContractStatus[];
   keeperStatus: string;
   connected: boolean;
+  network: string | null;
+  operatingMode: 'automatic' | 'read-only' | null;
+  currentLedger: number | null;
+  lastCheck: string | null;
+  uptime: number | null;
 }
 
 async function loadDashboardData(): Promise<DashboardData> {
   const keeperUrl = process.env.KEEPER_URL;
   if (!keeperUrl) {
-    return { contracts: [], keeperStatus: 'Not configured', connected: false };
+    return { contracts: [], keeperStatus: 'Not configured', connected: false, network: null, operatingMode: null, currentLedger: null, lastCheck: null, uptime: null };
   }
 
   const headers: HeadersInit = {};
@@ -37,10 +43,17 @@ async function loadDashboardData(): Promise<DashboardData> {
     ]);
     if (!contractsResponse.ok || !statusResponse.ok) throw new Error('Keeper request failed');
     const contractsBody = (await contractsResponse.json()) as { contracts: ContractStatus[] };
-    const statusBody = (await statusResponse.json()) as { overall: string };
-    return { contracts: contractsBody.contracts, keeperStatus: statusBody.overall, connected: true };
+    const statusBody = (await statusResponse.json()) as {
+      overall: string;
+      network: string;
+      operatingMode: 'automatic' | 'read-only';
+      currentLedger: number | null;
+      lastCheck: string | null;
+      uptime: number;
+    };
+    return { contracts: contractsBody.contracts, keeperStatus: statusBody.overall, connected: true, ...statusBody };
   } catch {
-    return { contracts: [], keeperStatus: 'Unavailable', connected: false };
+    return { contracts: [], keeperStatus: 'Unavailable', connected: false, network: null, operatingMode: null, currentLedger: null, lastCheck: null, uptime: null };
   }
 }
 
@@ -53,8 +66,7 @@ interface ContractRow {
   expiresAt: string | null;
   liveUntilLedger: number | null;
   status: 'healthy' | 'warning' | 'critical' | 'archived';
-  lastExtended: string;
-  autoBump: boolean;
+  lastChecked: string;
 }
 
 export default async function DashboardPage() {
@@ -78,12 +90,19 @@ export default async function DashboardPage() {
       ? Math.min(...contract.entries.map((entry) => entry.liveUntilLedgerSeq))
       : null,
     status: contract.overallStatus,
-    lastExtended: new Date(contract.checkedAt).toLocaleString(),
-    autoBump: true,
+    lastChecked: new Date(contract.checkedAt).toLocaleString(),
   }));
   const healthyCount = contracts.filter((contract) => contract.status === 'healthy').length;
   const healthRatio = contracts.length === 0 ? 0 : Math.round((healthyCount / contracts.length) * 100);
   const lowestTtlDays = contracts.length ? Math.min(...contracts.map((contract) => contract.ttlDays)) : 0;
+  const networkLabel = data.network ?? 'Unavailable';
+  const explorerNetwork = data.network === 'mainnet' ? 'public' : data.network ?? 'testnet';
+  const formatUptime = (seconds: number | null) => {
+    if (seconds === null) return 'Unavailable';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+  };
   const statusTone = data.keeperStatus === 'healthy'
     ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
     : data.keeperStatus === 'warning'
@@ -99,13 +118,13 @@ export default async function DashboardPage() {
             Evergreen Keeper
           </h1>
           <p className="text-slate-400 mt-2 max-w-2xl">
-            Live Stellar Testnet observability for Soroban contract state lifetime and archival risk.
+            Live Stellar {networkLabel} observability for Soroban contract state lifetime and archival risk.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm">
             <span className="text-slate-400">Network:</span>{' '}
-            <span className="text-emerald-400 font-mono">Testnet (Protocol 21)</span>
+            <span className="text-emerald-400 font-mono capitalize">{networkLabel}</span>
           </div>
           <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm">
             <span className="text-slate-400">Keeper Status:</span>{' '}
@@ -124,7 +143,7 @@ export default async function DashboardPage() {
               <h2 className="mt-1 text-xl font-semibold capitalize">{data.keeperStatus} contract state</h2>
               <p className="mt-1 text-sm opacity-80">
                 {data.keeperStatus === 'critical'
-                  ? 'The shortest-lived entry is below the configured 7-day extension threshold. Production is read-only, so no transaction is submitted automatically.'
+                  ? `The shortest-lived entry is below its configured critical threshold. The keeper is running in ${data.operatingMode ?? 'an unavailable'} mode.`
                   : 'The keeper is connected and reporting current Stellar ledger data.'}
               </p>
             </div>
@@ -153,12 +172,12 @@ export default async function DashboardPage() {
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
             <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Lowest Remaining TTL</h3>
             <p className="text-3xl font-bold mt-2 text-amber-400">{lowestTtlDays.toFixed(1)} days</p>
-            <span className="text-xs text-slate-400 mt-1 inline-block">Based on live Testnet ledgers</span>
+            <span className="text-xs text-slate-400 mt-1 inline-block">Based on live {networkLabel} ledgers</span>
           </div>
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
-            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Operating Mode</h3>
-            <p className="text-3xl font-bold mt-2 text-blue-400">Read-only</p>
-            <span className="text-xs text-slate-400 mt-1 inline-block">No signer configured in production</span>
+            <h3 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Current Ledger</h3>
+            <p className="text-3xl font-bold mt-2 text-blue-400">{data.currentLedger?.toLocaleString() ?? '—'}</p>
+            <span className="text-xs text-slate-400 mt-1 inline-block">Keeper uptime: {formatUptime(data.uptime)}</span>
           </div>
         </div>
 
@@ -169,7 +188,7 @@ export default async function DashboardPage() {
               <h2 className="text-xl font-semibold">TTL Registry Status</h2>
               <p className="mt-1 text-sm text-slate-400">Live instance and code-entry lifetime from Stellar RPC.</p>
             </div>
-            <a href="https://stellar.expert/explorer/testnet" className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Open Stellar Explorer ↗</a>
+            <a href={`https://stellar.expert/explorer/${explorerNetwork}`} className="text-sm font-medium text-emerald-400 hover:text-emerald-300">Open Stellar Explorer ↗</a>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -195,7 +214,7 @@ export default async function DashboardPage() {
                   <tr key={c.id} className="hover:bg-slate-800/40 transition-colors">
                     <td className="py-4 px-6 font-medium text-slate-200">{c.name}</td>
                     <td className="py-4 px-6 font-mono text-slate-400">
-                      <a className="hover:text-emerald-400" href={`https://stellar.expert/explorer/testnet/contract/${c.id}`}>{c.address} ↗</a>
+                      <a className="hover:text-emerald-400" href={`https://stellar.expert/explorer/${explorerNetwork}/contract/${c.id}`}>{c.address} ↗</a>
                     </td>
                     <td className="py-4 px-6 font-mono font-semibold">
                       {c.ttlRemaining.toLocaleString()}
@@ -226,7 +245,7 @@ export default async function DashboardPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-4 px-6 text-slate-400">{c.lastExtended}</td>
+                    <td className="py-4 px-6 text-slate-400">{c.lastChecked}</td>
                   </tr>
                 ))}
               </tbody>
