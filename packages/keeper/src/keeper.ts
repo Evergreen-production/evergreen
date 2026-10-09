@@ -43,11 +43,6 @@ export class Keeper {
 
     this.rpc = createRpcClient(config.rpcUrl);
 
-    this.httpApi = new HttpStatusApi(this.store, {
-      port: parseInt(process.env["PORT"] ?? process.env["EVERGREEN_API_PORT"] ?? "8742", 10),
-      token: config.keeperApiToken ?? process.env["EVERGREEN_KEEPER_API_TOKEN"],
-    });
-
     // Load keypair from environment only — never from config
     const secretKey = process.env["EVERGREEN_SECRET_KEY"];
     if (secretKey) {
@@ -60,6 +55,13 @@ export class Keeper {
     } else {
       console.warn("[keeper] EVERGREEN_SECRET_KEY not set. Running in read-only/check mode (no extend/restore).");
     }
+
+    this.httpApi = new HttpStatusApi(this.store, {
+      port: parseInt(process.env["PORT"] ?? process.env["EVERGREEN_API_PORT"] ?? "8742", 10),
+      token: config.keeperApiToken ?? process.env["EVERGREEN_KEEPER_API_TOKEN"],
+      network: config.network,
+      signerConfigured: Boolean(this.keypair),
+    });
   }
 
   async start(): Promise<void> {
