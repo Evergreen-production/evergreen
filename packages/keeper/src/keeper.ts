@@ -65,8 +65,11 @@ export class Keeper {
   async start(): Promise<void> {
     this.running = true;
     console.log(`[keeper] Starting Evergreen keeper (network: ${this.config.network})`);
-    await this.httpApi.start();
+    // Seed the API before accepting requests. Container platforms can route the
+    // first request as soon as the port opens; listening first would expose an
+    // empty contract list while the initial Stellar scan was still running.
     await this.runCycle();
+    await this.httpApi.start();
   }
 
   async stop(): Promise<void> {
