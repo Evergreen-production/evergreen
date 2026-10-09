@@ -1,0 +1,12 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+version: 1
+site:
+  title: Evergreen Documentation
+  structure:
+    - type: space
+      key: evergreen-docs
+      title: Evergreen
+      path: docs
+      default: true
+      content:
+        directory: ./docs
