@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7B61FF)](https://developers.stellar.org/docs/build/smart-contracts)
 
-[Live dashboard](https://evergreen-labs.vercel.app) · [Documentation](docs/README.md) · [Quickstart](docs/using/quickstart.md) · [Security](SECURITY.md)
+[Live dashboard](https://evergreen-labs.vercel.app) · [Documentation](https://entity-6.gitbook.io/evergreen-documentation/) · [Quickstart](docs/using/quickstart.md) · [Security](SECURITY.md)
 
 Soroban ledger entries have a finite time to live. When contract instance, code, or persistent data expires, applications can lose access until the state is restored. Evergreen turns that operational risk into a monitored workflow: inspect TTLs, classify risk, alert operators, simulate remediation, and—when explicitly enabled—extend or restore entries within strict fee limits.
 
