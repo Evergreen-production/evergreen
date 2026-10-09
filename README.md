@@ -1,146 +1,100 @@
-# 🌲 Evergreen
+# Evergreen
 
-> **Automated TTL & State-Archival Keeper for Soroban Smart Contracts on Stellar**
+**Automated TTL monitoring and guarded state preservation for Stellar Soroban contracts.**
 
-[![CI](https://github.com/Michealshodipo56/evergreen/actions/workflows/ci.yml/badge.svg)](https://github.com/Michealshodipo56/evergreen/actions)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Network Default](https://img.shields.io/badge/Default_Network-Testnet-amber.svg)](docs/config-reference.md)
+[![CI](https://github.com/Evergreen-production/evergreen/actions/workflows/ci.yml/badge.svg)](https://github.com/Evergreen-production/evergreen/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Evergreen-production/evergreen/actions/workflows/codeql.yml/badge.svg)](https://github.com/Evergreen-production/evergreen/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/Evergreen-production/evergreen)](https://github.com/Evergreen-production/evergreen/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Stellar](https://img.shields.io/badge/Stellar-Soroban-7B61FF)](https://developers.stellar.org/docs/build/smart-contracts)
 
-Soroban contract data, contract instance entries, and contract WASM code entries have a Time To Live (TTL) measured in ledger sequences. If entries are not periodically extended, they become **archived** and contract invocations fail until restored via footprint operations.
+[Live dashboard](https://evergreen-labs.vercel.app) · [Documentation](docs/README.md) · [Quickstart](docs/using/quickstart.md) · [Security](SECURITY.md)
 
-**Evergreen** is an open-source TypeScript & Rust toolchain designed to systematically scan, alert, extend, and restore Soroban storage TTLs within strict configurable fee and budget guardrails.
+Soroban ledger entries have a finite time to live. When contract instance, code, or persistent data expires, applications can lose access until the state is restored. Evergreen turns that operational risk into a monitored workflow: inspect TTLs, classify risk, alert operators, simulate remediation, and—when explicitly enabled—extend or restore entries within strict fee limits.
 
----
+## Why Evergreen
 
-## 🚀 5-Minute Quickstart
+- **Early warning:** classify entries as healthy, warning, critical, or archived.
+- **Safe automation:** simulate before signing and enforce per-transaction and daily spend caps.
+- **Operator visibility:** expose a read-only status API and live dashboard.
+- **Flexible operation:** use the CLI for one-shot checks or the keeper for scheduled monitoring.
+- **Security by default:** Testnet-first configuration, environment-only signing keys, and read-only operation without a signer.
 
-### 1. Install Evergreen CLI
-```bash
-pnpm add -g @evergreen/cli
-# or run directly with npx / pnpm dlx
-pnpm evergreen --help
-```
+## Live submission
 
-### 2. Initialize Configuration
-Generate a starter `evergreen.toml` configuration:
-```bash
-evergreen init
-```
+The public deployment monitors a verified Stellar Testnet contract in read-only mode:
 
-### 3. Check Contract TTL Status
-Inspect the TTL state of contract instances, code entries, and persistent storage entries:
-```bash
-evergreen check --config evergreen.toml
-```
+- Dashboard: [evergreen-labs.vercel.app](https://evergreen-labs.vercel.app)
+- Contract: [`CCAK6YBIECDQ2GFPMYLV3GWQPJN2DVGJGDHKY76ESZHI56DZMELSTPRV`](https://stellar.expert/explorer/testnet/contract/CCAK6YBIECDQ2GFPMYLV3GWQPJN2DVGJGDHKY76ESZHI56DZMELSTPRV)
+- Network: Stellar Testnet
 
-### 4. Perform a Dry-Run Extend
-Simulate extending low-TTL entries without submitting transactions or spending fee stroops:
-```bash
-evergreen extend --config evergreen.toml --dry-run
-```
+Read-only mode is deliberate for the public demo: it proves live RPC inspection without exposing or funding a signing key. Automated extension activates only when an operator privately configures `EVERGREEN_SECRET_KEY`.
 
-### 5. Extend Entries on Testnet
-Export your keeper secret key and execute state extension:
-```bash
-export EVERGREEN_SECRET_KEY="S..."
-evergreen extend --config evergreen.toml --yes
-```
-
----
-
-## 🏗️ Architecture & Component Overview
+## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Core ["@evergreen/core"]
-        Scanner[TTL Scanner & Inspector]
-        FootprintBuilder[Footprint Builder & Simulator]
-        ThresholdEngine[Status & Threshold Evaluator]
-    end
-
-    subgraph Operations
-        CLI["CLI (@evergreen/cli)"]
-        KeeperDaemon["Keeper Daemon (@evergreen/keeper)"]
-        GAction["GitHub Action (evergreen-check)"]
-    end
-
-    subgraph Infrastructure
-        StellarRPC[Stellar Soroban RPC]
-        SQLite[(Keeper SQLite Store)]
-        AlertChannels[Alert Channels: Webhook / Slack / Discord]
-        Dashboard["Dashboard UI (@evergreen/dashboard)"]
-    end
-
-    CLI --> Core
-    KeeperDaemon --> Core
-    GAction --> CLI
-
-    Core <--> StellarRPC
-    KeeperDaemon --> SQLite
-    KeeperDaemon --> AlertChannels
-    Dashboard <--> KeeperDaemon
+flowchart LR
+    Operator --> CLI[Evergreen CLI]
+    Scheduler --> Keeper[Keeper service]
+    CLI --> Core[Core TTL engine]
+    Keeper --> Core
+    Core <--> RPC[Stellar RPC]
+    Keeper --> Store[(SQLite state)]
+    Keeper --> Alerts[Webhook / Slack / Discord]
+    Dashboard -->|private service binding| Keeper
 ```
 
-- **`@evergreen/core`**: Pure TS library handling Stellar RPC querying, XDR footprint simulation, fee calculation, and extend/restore transaction assembly.
-- **`@evergreen/cli`**: Terminal application (`evergreen`) supporting `init`, `check`, `extend`, `restore`, and `watch` commands with JSON & table output modes.
-- **`@evergreen/keeper`**: Production daemon service with scheduled polling, state persistence, daily spend caps, balance alerts, deduplicated notifications, and a read-only HTTP status API.
-- **`@evergreen/dashboard`**: Modern Next.js App Router frontend visualizing real-time contract TTL health, active alerts, execution runs, and keeper metrics.
-- **`evergreen-ttl`**: Lightweight Rust helper crate for Soroban contract authors to manage storage TTL natively inside contract code.
+| Component              | Purpose                                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| `@evergreen/core`      | Configuration validation, ledger inspection, TTL classification, and transaction planning |
+| `@evergreen/cli`       | One-shot checks, dry runs, extensions, and restores                                       |
+| `@evergreen/keeper`    | Scheduled scans, guarded execution, state history, alerts, and status API                 |
+| `@evergreen/dashboard` | Server-rendered operational view of keeper state                                          |
+| `evergreen-ttl`        | Rust helpers for contract-side TTL management                                             |
 
----
+## Run locally
 
-## 📦 Packages in this Monorepo
+Requirements: Node.js 20+, pnpm 9+, and Rust for the helper crate.
 
-| Package / Crate | Path | Description |
-| :--- | :--- | :--- |
-| `@evergreen/core` | [`packages/core`](packages/core) | Core inspection logic, simulation, and transaction builders |
-| `@evergreen/cli` | [`packages/cli`](packages/cli) | Command-line interface |
-| `@evergreen/keeper` | [`packages/keeper`](packages/keeper) | Daemon service, scheduler, persistent store, and HTTP status API |
-| `@evergreen/dashboard` | [`packages/dashboard`](packages/dashboard) | Web visualizer for the Keeper service |
-| `evergreen-ttl` | [`crates/evergreen-ttl`](crates/evergreen-ttl) | Rust crate with Soroban storage TTL extension helper functions |
-| `evergreen-check` | [`.github/actions/evergreen-check`](.github/actions/evergreen-check) | GitHub Action for automated CI TTL threshold checks |
-
----
-
-## ⚙️ Configuration Reference
-
-See [`docs/config-reference.md`](docs/config-reference.md) for full details.
-
-Sample `evergreen.toml`:
-```toml
-network = "testnet"
-rpc_url = "https://soroban-testnet.stellar.org"
-network_passphrase = "Test SDF Network ; September 2015"
-
-check_interval_seconds = 3600
-max_daily_spend_stroops = 10000000 # 1 XLM
-
-[contracts.my_contract]
-id = "CCWM6P2N6F5V..."
-label = "Core DeFi Pool"
-warn_below_days = 30
-extend_below_days = 7
-extend_to_days = 90
-max_fee_stroops = 500000
-watch_entries = ["instance", "code"]
+```bash
+git clone https://github.com/Evergreen-production/evergreen.git
+cd evergreen
+pnpm install --frozen-lockfile
+pnpm build
+node packages/cli/dist/index.js init
 ```
 
-> 🔒 **Security Note:** Secret keys are **NEVER** placed in `evergreen.toml`. Supply secret keys via the `EVERGREEN_SECRET_KEY` environment variable.
+Replace the generated contract ID with a Testnet `C...` address, then inspect it:
 
----
+```bash
+node packages/cli/dist/index.js --config evergreen.toml check
+node packages/cli/dist/index.js --config evergreen.toml extend --dry-run
+```
 
-## 🛡️ Safety & Security
+See the [complete quickstart](docs/using/quickstart.md) for configuration and expected output.
 
-Evergreen is designed around strict safety defaults:
-- **Default Network:** Testnet. Mainnet execution requires explicit flag `--network mainnet` or `network = "mainnet"` with printed warnings.
-- **Dry-Run Default:** Single interactive extension commands prompt for confirmation unless `--yes` is specified.
-- **Spend Guardrails:** Daily transaction fee caps and per-transaction fee/resource caps prevent run-away account draining.
-- **Secret Protection:** Secret keys are strictly stripped from all log outputs, state files, HTTP API responses, and errors.
+## Safety model
 
-See [`docs/threat-model.md`](docs/threat-model.md) and [`SECURITY.md`](SECURITY.md).
+- Secret keys never belong in TOML, source control, logs, or API responses.
+- Without `EVERGREEN_SECRET_KEY`, the keeper can inspect but cannot submit transactions.
+- Extension and restoration plans are simulated before submission.
+- Contract-level fee ceilings and global daily budgets bound signer exposure.
+- Mainnet selection is explicit and produces an operator warning.
 
----
+See the [threat model](docs/threat-model.md) and [production checklist](docs/operations/production-checklist.md).
 
-## 📜 License
+## Development
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+cargo test --manifest-path crates/evergreen-ttl/Cargo.toml
+```
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
