@@ -18,7 +18,7 @@ import type { AlertChannel, AlertPayload } from "./alerts.js";
 export class TelegramAlertChannel implements AlertChannel {
   constructor(
     private readonly botToken: string,
-    private readonly chatId: string
+    private readonly chatId: string,
   ) {}
 
   async send(payload: AlertPayload): Promise<void> {
@@ -36,7 +36,9 @@ export class TelegramAlertChannel implements AlertChannel {
     });
 
     if (!resp.ok) {
-      throw new Error(`Telegram notification failed: ${resp.status} ${resp.statusText}`);
+      throw new Error(
+        `Telegram notification failed: ${resp.status} ${resp.statusText}`,
+      );
     }
   }
 }
@@ -47,14 +49,21 @@ export class TelegramAlertChannel implements AlertChannel {
 In `packages/keeper/src/alerts.ts`, add your channel type to the factory switch statement:
 
 ```typescript
-export function createAlertChannels(channelConfigs: AlertChannelConfig[]): AlertChannel[] {
+export function createAlertChannels(
+  channelConfigs: AlertChannelConfig[],
+): AlertChannel[] {
   return channelConfigs.map((cfg) => {
     switch (cfg.type) {
-      case "slack": return new SlackAlertChannel(cfg.url);
-      case "discord": return new DiscordAlertChannel(cfg.url);
-      case "webhook": return new WebhookAlertChannel(cfg.url, cfg.token);
-      case "telegram": return new TelegramAlertChannel(cfg.token!, cfg.url);
-      default: throw new Error(`Unknown alert channel type: ${cfg.type}`);
+      case "slack":
+        return new SlackAlertChannel(cfg.url);
+      case "discord":
+        return new DiscordAlertChannel(cfg.url);
+      case "webhook":
+        return new WebhookAlertChannel(cfg.url, cfg.token);
+      case "telegram":
+        return new TelegramAlertChannel(cfg.token!, cfg.url);
+      default:
+        throw new Error(`Unknown alert channel type: ${cfg.type}`);
     }
   });
 }
@@ -65,6 +74,7 @@ export function createAlertChannels(channelConfigs: AlertChannelConfig[]): Alert
 ## ⚡ Alert Triggers & Cooldown Deduplication
 
 Evergreen automatically triggers alerts for:
+
 - Entry status transition to `warning`, `critical`, or `archived`
 - Extend or restore operation failure
 - Daily spend cap reached or exceeded

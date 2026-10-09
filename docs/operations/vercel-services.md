@@ -1,16 +1,27 @@
-# Vercel Services Deployment
+# Vercel Services
 
-The repository defines two Vercel services:
+Evergreen uses Vercel Services to deploy two independently built services from one repository.
 
-- `dashboard`: public Next.js frontend routed at `/`
-- `keeper`: internal container service
+## Service map
 
-The keeper service uses the repository root as its build context so its Dockerfile can access the workspace lockfile and the shared `@evergreen/core` package. Its container entrypoint remains `packages/keeper/Dockerfile`.
+- `dashboard`: public Next.js service at `/`
+- `keeper`: internal container service with no public rewrite
+- Binding: `dashboard` calls `keeper` through the injected `KEEPER_URL`
 
-The dashboard declares a service binding to the keeper. Vercel injects the keeper's internal base URL as `KEEPER_URL`; do not create that variable manually. Dashboard data is fetched only from server-side code because service bindings are unavailable in browser code and at build time.
+The root-level `Dockerfile` gives the keeper access to the pnpm workspace lockfile and shared `@evergreen/core` package. Runtime configuration comes from `EVERGREEN_CONFIG_TOML`; Vercel's injected `PORT` is honored automatically.
 
-Configure `EVERGREEN_CONFIG_TOML` with the complete keeper TOML configuration. Configure `EVERGREEN_SECRET_KEY` only when automated transaction submission is intended. If `EVERGREEN_KEEPER_API_TOKEN` is set, it is shared by the keeper and dashboard so server-side requests can authenticate.
+The dashboard performs keeper requests in server-side page code. Service bindings are runtime-only and are not available to browser code, middleware, or build steps.
 
-The keeper honors Vercel's injected `PORT` automatically. Run `vercel dev` from the repository root to start both services locally with bindings.
+## Current public configuration
 
-The current keeper stores operational history in SQLite. Confirm a durable storage design before relying on history across container replacements; local container filesystems should be treated as ephemeral.
+The submission deployment monitors one verified Testnet contract every five minutes. Its SQLite database is stored at `/tmp/evergreen.db`, so cycle history may reset when Vercel replaces the container. Contract health is always recalculated from Stellar RPC during startup.
+
+## Local integration
+
+Run all declared services and bindings together from the repository root:
+
+```bash
+vercel dev
+```
+
+Do not create `KEEPER_URL` yourself. Vercel derives it from the service binding.

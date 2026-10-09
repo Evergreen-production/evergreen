@@ -5,6 +5,7 @@ This log records major technical decisions made during the design and implementa
 ---
 
 ## ADR-001: Monorepo Structure & Package Boundaries
+
 - **Date**: 2026-10-08
 - **Decision**: Use pnpm workspaces with clean layer boundaries:
   - `@evergreen/core`: Pure library containing TTL calculations, footprint building, inspection algorithms, simulation wrappers, and footprint extend/restore logic. Takes injectable RPC provider and config. No direct process, env, or CLI I/O.
@@ -20,6 +21,7 @@ This log records major technical decisions made during the design and implementa
 ---
 
 ## ADR-002: Default Network Policy (Testnet vs Mainnet Safety)
+
 - **Date**: 2026-10-08
 - **Decision**: Default network throughout all packages, CLI commands, config templates, and keeper service is **Testnet**. Mainnet operations require explicit `--network mainnet` CLI flag or `network = "mainnet"` in `evergreen.toml`, paired with a loud warning output.
 - **Alternatives Considered**:
@@ -30,6 +32,7 @@ This log records major technical decisions made during the design and implementa
 ---
 
 ## ADR-003: Secret Key Handling & Environment Isolation
+
 - **Date**: 2026-10-08
 - **Decision**: Secret keys for Stellar accounts (keeper / submitter keys) must NEVER be read from config files (`evergreen.toml`), logged in console/file logs, or returned in error messages/status APIs. Secret keys are loaded solely from environment variables (e.g. `EVERGREEN_SECRET_KEY`) or passed via CLI flag `--secret-key` (discouraged in production).
 - **Alternatives Considered**:
@@ -39,6 +42,7 @@ This log records major technical decisions made during the design and implementa
 ---
 
 ## ADR-004: Persistent State Storage Engine for Keeper
+
 - **Date**: 2026-10-08
 - **Decision**: Use SQLite via `better-sqlite3` (with a simple JSON file store fallback if native build is unavailable in light environments) for the Keeper daemon.
 - **Alternatives Considered**:
@@ -49,6 +53,7 @@ This log records major technical decisions made during the design and implementa
 ---
 
 ## ADR-005: Alert Channel Architecture & Deduplication Strategy
+
 - **Date**: 2026-10-08
 - **Decision**: Implement a pluggable `AlertChannel` interface with standard channels (Generic Webhook, Slack, Discord). Deduplicate alerts using a stateful cooldown registry stored in SQLite/StateStore (keyed by `contractId:entryKey:alertType`), preventing notification spam across check cycles.
 - **Alternatives Considered**:
